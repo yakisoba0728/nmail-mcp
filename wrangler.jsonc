@@ -11,8 +11,11 @@
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   // OAuth clients and tokens. Without an id, wrangler creates the namespace on first deploy.
   "kv_namespaces": [{ "binding": "OAUTH_KV" }],
-  // 5 password attempts per IP per minute on /authorize
-  "ratelimits": [{ "name": "LOGIN_LIMITER", "namespace_id": "1001", "simple": { "limit": 5, "period": 60 } }],
+  // password attempts on /authorize: 5 per IP and 30 in total per minute
+  "ratelimits": [
+    { "name": "LOGIN_LIMITER", "namespace_id": "1001", "simple": { "limit": 5, "period": 60 } },
+    { "name": "GLOBAL_LOGIN_LIMITER", "namespace_id": "1002", "simple": { "limit": 30, "period": 60 } }
+  ],
   // every minute: scheduled send; every 5 minutes: rules + vacation responder (IMAP login only when one is active)
   "triggers": { "crons": ["* * * * *", "*/5 * * * *"] },
   "observability": { "enabled": false }

@@ -26,7 +26,7 @@ Environment:
   DATA_DIR                       state directory (default ./data)
 serve only:
   PORT (default 8787), HOST (default 127.0.0.1)
-  PUBLIC_URL                     external base URL, e.g. https://mail.example.com (needed behind a proxy)
+  PUBLIC_URL                     external base URL, e.g. https://mail.example.com (required unless only localhost is used)
   TRUST_PROXY=1                  use X-Forwarded-For / -Proto / -Host from the reverse proxy
 `;
 
@@ -37,7 +37,8 @@ function rateLimiter(limit: number, periodSec: number) {
       const window = Math.floor(Date.now() / 1000 / periodSec);
       const h = hits.get(key);
       if (!h || h.window !== window) {
-        if (hits.size > 10_000) hits.clear();
+        // Drop only finished windows; clearing everything would also reset counters that are still active.
+        if (hits.size > 10_000) for (const [k, v] of hits) if (v.window !== window) hits.delete(k);
         hits.set(key, { window, count: 1 });
         return { success: true };
       }
@@ -61,6 +62,7 @@ function loadEnv() {
     NAVER_SIGNATURE: process.env.NAVER_SIGNATURE,
     OAUTH_KV: kv,
     LOGIN_LIMITER: rateLimiter(5, 60), // same as wrangler.jsonc
+    GLOBAL_LOGIN_LIMITER: rateLimiter(30, 60),
   };
   Object.assign(shared, e); // the object the MCP tools read
   return { e, kv };
@@ -84,12 +86,21 @@ async function serve() {
   const publicUrl = process.env.PUBLIC_URL?.replace(/\/+$/, '');
   const trustProxy = /^(1|true|yes)$/i.test(process.env.TRUST_PROXY ?? '');
   const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)?.split(',')[0].trim();
+  // The client controls the left of X-Forwarded-For; the right-most entry is the one the trusted proxy appended.
+  const lastHop = (v: string | string[] | undefined) => [v ?? []].flat().join(',').split(',').map((s) => s.trim()).filter(Boolean).at(-1);
+  const loopback = /^(localhost|127(\.\d+){3}|\[::1\])(:\d+)?$/i;
 
   const server = createHttpServer(async (req, res) => {
     try {
       const proto = (trustProxy && first(req.headers['x-forwarded-proto'])) || 'http';
       const hostHeader = (trustProxy && first(req.headers['x-forwarded-host'])) || req.headers.host || `localhost:${port}`;
       // OAuth tokens are bound to this origin, so it must be the URL clients use.
+      // Without PUBLIC_URL only loopback hosts are served: a Host header from anywhere else would mint a new OAuth origin.
+      if (!publicUrl && !loopback.test(hostHeader)) {
+        res.writeHead(421, { 'content-type': 'text/plain; charset=utf-8' });
+        res.end('Set PUBLIC_URL to the address clients use (e.g. https://mail.example.com) to serve non-local hosts.\n');
+        return;
+      }
       const url = new URL(req.url ?? '/', publicUrl ?? `${proto}://${hostHeader}`);
       if (process.env.NMAIL_TEST_SCHEDULED === '1' && url.pathname === '/__scheduled') {
         await runCron(e as never, url.searchParams.get('cron') ?? '* * * * *');
@@ -100,7 +111,7 @@ async function serve() {
       for (const [k, v] of Object.entries(req.headers)) if (v !== undefined && k !== 'host') for (const x of Array.isArray(v) ? v : [v]) headers.append(k, x);
       headers.set('host', url.host);
       // The rate limiter keys on this header (set by Cloudflare on Workers); never trust a client-sent one.
-      headers.set('cf-connecting-ip', (trustProxy && first(req.headers['x-forwarded-for'])) || req.socket.remoteAddress || 'unknown');
+      headers.set('cf-connecting-ip', (trustProxy && lastHop(req.headers['x-forwarded-for'])) || req.socket.remoteAddress || 'unknown');
       const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
       const request = new Request(url, { method: req.method, headers, body: hasBody ? (Readable.toWeb(req) as unknown as ReadableStream) : undefined, duplex: 'half' } as RequestInit);
       const ctx = { waitUntil: (p: Promise<unknown>) => void p.catch((err: Error) => log(err.message)), passThroughOnException() {}, props: {} };

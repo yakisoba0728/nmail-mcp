@@ -8,6 +8,8 @@ import { createServer } from './tools';
 // or a self-hosted server). The MCP handler's Host/Origin check only knows localhost and workers.dev by default, so it
 // is told about the origin it serves; every /mcp request is already authenticated by the OAuth provider in front of it.
 const providers = new Map<string, OAuthProvider<Env>>();
+// Only routed hostnames reach a Worker and the Node server pins its origin, so few origins exist; the cap is a backstop.
+const MAX_ORIGINS = 8;
 
 export default {
   fetch(req: Request, e: Env, ctx: ExecutionContext) {
@@ -26,6 +28,7 @@ export default {
         clientIdMetadataDocumentEnabled: true,
         resourceMetadata: { resource: `${origin}/mcp` },
       });
+      if (providers.size >= MAX_ORIGINS) providers.delete(providers.keys().next().value!);
       providers.set(origin, p);
     }
     // The library caches its helpers on env (`env.OAUTH_PROVIDER ??= …`) the first time; a shared env would then

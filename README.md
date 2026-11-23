@@ -329,8 +329,8 @@ env = { NAVER_ID = "myid", NAVER_APP_PASSWORD = "xxxxxxxxxxxx" }
 | `PORT` | | `8787` | Node.js·Docker: 수신 포트 |
 | `HOST` | | `127.0.0.1` (Docker: `0.0.0.0`) | Node.js·Docker: 수신 주소 |
 | `DATA_DIR` | | `./data` (Docker: `/data`) | Node.js·Docker: 상태 저장 디렉터리 |
-| `PUBLIC_URL` | | 요청 주소 | Node.js·Docker: 외부 접속 주소. 프록시나 터널 뒤에서는 필수 |
-| `TRUST_PROXY` | | | Node.js·Docker: `1`이면 `X-Forwarded-*` 헤더를 신뢰 |
+| `PUBLIC_URL` | | | Node.js·Docker: 외부 접속 주소. 없으면 `localhost`·`127.0.0.1`로 들어온 요청만 처리합니다 |
+| `TRUST_PROXY` | | | Node.js·Docker: `1`이면 `X-Forwarded-*` 헤더를 신뢰. 클라이언트 IP는 `X-Forwarded-For`의 마지막 값을 사용 |
 
 Cloudflare Workers에서는 `wrangler secret put`으로 앞의 네 값을 설정합니다.
 
@@ -451,7 +451,7 @@ Cloudflare 배포에서 `wrangler tail`로 측정한 요청당 CPU 시간입니�
 ## 보안
 
 - 네이버 자격 증명은 시크릿(Workers) 또는 환경 변수(Node.js·Docker)로만 전달되며 저장소(KV·SQLite)에 기록되지 않습니다. 저장소에는 OAuth 토큰과 자동화 상태만 저장됩니다.
-- OAuth 로그인 화면은 권한을 받을 대상을 표시하고, 알려지지 않은 웹 주소일 경우 경고합니다. 로그인 시도는 IP당 분당 5회로 제한됩니다.
+- OAuth 로그인 화면은 권한을 받을 대상을 표시하고, 알려지지 않은 웹 주소일 경우 경고합니다. 로그인 시도는 IP당 분당 5회, 전체 분당 30회로 제한됩니다.
 - 메일 본문은 신뢰할 수 없는 입력으로 취급해야 합니다. 도구 설명에서 발송·삭제 전 사용자 확인을 요구하지만 서버에서 강제하지는 않으므로, 클라이언트의 도구 실행 확인 기능을 사용하는 것이 좋습니다.
 - 자동 전달 규칙은 지원하지 않습니다.
 - `bulk_action`은 영구 삭제를 지원하지 않으며, 사전 집계 결과와 실행 시점의 개수가 다르면 실행을 거부합니다.
