@@ -1,0 +1,6 @@
+node_modules
+.wrangler
+.dev.vars
+bench/last-run.txt
+worker-startup.cpuprofile
+bench/last-compose.txt

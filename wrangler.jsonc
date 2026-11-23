@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nmail-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  // global_fetch_strictly_public: required by the OAuth library to fetch URL-style client ids (CIMD)
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  // OAuth clients and tokens. Without an id, wrangler creates the namespace on first deploy.
+  "kv_namespaces": [{ "binding": "OAUTH_KV" }],
+  // 5 password attempts per IP per minute on /authorize
+  "ratelimits": [{ "name": "LOGIN_LIMITER", "namespace_id": "1001", "simple": { "limit": 5, "period": 60 } }],
+  // every minute: scheduled send; every 5 minutes: rules + vacation responder (IMAP login only when one is active)
+  "triggers": { "crons": ["* * * * *", "*/5 * * * *"] },
+  "observability": { "enabled": false }
+  // Secrets: wrangler secret put NAVER_ID / NAVER_APP_PASSWORD (optional: NAVER_NAME = sender display name, NAVER_SIGNATURE = signature text)
+}
