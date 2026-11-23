@@ -29,7 +29,11 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
 
 async function safeEqual(a: string, b: string) {
   const [x, y] = await Promise.all([a, b].map((s) => crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))));
-  return crypto.subtle.timingSafeEqual(x, y);
+  // Constant-time over the two digests (crypto.subtle.timingSafeEqual exists only on Workers).
+  const [p, q] = [new Uint8Array(x), new Uint8Array(y)];
+  let diff = 0;
+  for (let i = 0; i < p.length; i++) diff |= p[i] ^ q[i];
+  return diff === 0;
 }
 
 const text = (body: string, status: number) => new Response(body, { status, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });

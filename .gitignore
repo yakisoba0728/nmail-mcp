@@ -5,3 +5,6 @@ bench/last-run.txt
 worker-startup.cpuprofile
 bench/last-compose.txt
 .env
+dist
+data
+.env.docker

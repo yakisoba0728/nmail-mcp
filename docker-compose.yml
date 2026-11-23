@@ -1,0 +1,15 @@
+services:
+  nmail-mcp:
+    image: ghcr.io/yakisoba0728/nmail-mcp:latest
+    build: .
+    restart: unless-stopped
+    env_file: .env.docker            # NAVER_ID, NAVER_APP_PASSWORD, PUBLIC_URL, ...
+    environment:
+      TRUST_PROXY: "1"               # behind a reverse proxy or tunnel
+    ports:
+      - "127.0.0.1:8787:8787"        # localhost only; publish it through a proxy or tunnel with HTTPS
+    volumes:
+      - nmail-data:/data
+
+volumes:
+  nmail-data:
