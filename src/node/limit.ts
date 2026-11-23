@@ -1,22 +1,33 @@
 /**
- * Fixed-window rate limiter with the shape of the Workers rate-limit binding.
- * Memory is bounded: one window at a time, at most `maxKeys` entries; when full the oldest entry is evicted
- * (refusing new keys instead would let a flood of addresses lock everyone out).
+ * Fixed-window rate limiter with the shape of the Workers rate-limit binding. Memory is bounded per window:
+ * - keys under the limit live in `counting`; when it is full the oldest is evicted (refusing new keys instead would
+ *   let a flood of addresses lock everyone out);
+ * - keys over the limit move to `blocked`, which eviction in `counting` never touches, so flooding cannot reset a
+ *   block. `blocked` has the same cap; filling it takes `limit + 1` requests per key.
  */
 export function rateLimiter(limit: number, periodSec: number, maxKeys = 50_000) {
-  const hits = new Map<string, number>();
+  const counting = new Map<string, number>();
+  const blocked = new Set<string>();
   let current = 0;
   return {
     async limit({ key }: { key: string }) {
       const window = Math.floor(Date.now() / 1000 / periodSec);
       if (window !== current) {
-        hits.clear();
+        counting.clear();
+        blocked.clear();
         current = window;
       }
-      const count = (hits.get(key) ?? 0) + 1;
-      if (!hits.has(key) && hits.size >= maxKeys) hits.delete(hits.keys().next().value!);
-      hits.set(key, count);
-      return { success: count <= limit };
+      if (blocked.has(key)) return { success: false };
+      const count = (counting.get(key) ?? 0) + 1;
+      if (count > limit) {
+        counting.delete(key);
+        if (blocked.size >= maxKeys) blocked.delete(blocked.values().next().value!);
+        blocked.add(key);
+        return { success: false };
+      }
+      if (!counting.has(key) && counting.size >= maxKeys) counting.delete(counting.keys().next().value!);
+      counting.set(key, count);
+      return { success: true };
     },
   };
 }

@@ -19,6 +19,8 @@ test('rateLimiter: per-key limit, reset per window, bounded without locking out 
   expect([await ok('a'), await ok('a'), await ok('a')]).toEqual([true, true, false]);
   // Map full: new keys still get through (oldest entries are evicted), so a flood cannot lock others out.
   for (const k of ['b', 'c', 'd', 'e']) expect(await ok(k)).toBe(true);
+  // ...and the flood did not reset the block on 'a'.
+  expect(await ok('a')).toBe(false);
   vi.setSystemTime(new Date('2026-11-24T00:01:10Z'));
   expect(await ok('a')).toBe(true); // new window
   vi.useRealTimers();
