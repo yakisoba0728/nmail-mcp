@@ -1,3 +1,5 @@
+# Copy to .dev.vars for `npm run dev` / `npm run e2e` (never committed)
 NAVER_ID=myid
 NAVER_APP_PASSWORD=애플리케이션비밀번호
 # NAVER_NAME=홍길동
+# NAVER_SIGNATURE=홍길동 드림\n010-0000-0000

@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "nmail-mcp",
+  // If your Cloudflare login can see several accounts, put CLOUDFLARE_ACCOUNT_ID=<id> in .env (not committed)
   "main": "src/index.ts",
   // Served only at https://nmail-mcp.<subdomain>.workers.dev; no per-version preview URLs
   "workers_dev": true,

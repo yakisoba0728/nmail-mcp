@@ -4,3 +4,4 @@ node_modules
 bench/last-run.txt
 worker-startup.cpuprofile
 bench/last-compose.txt
+.env
