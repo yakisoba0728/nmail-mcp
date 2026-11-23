@@ -4,8 +4,6 @@ import * as mail from './mail';
 export interface Env extends mail.MailEnv {
   OAUTH_KV: KVNamespace;
   LOGIN_LIMITER: RateLimit;
-  /** All sign-in attempts together, so spreading guesses over many IPs does not help */
-  GLOBAL_LOGIN_LIMITER: RateLimit;
   OAUTH_PROVIDER: OAuthHelpers;
 }
 
@@ -60,8 +58,8 @@ export async function authorize(req: Request, e: Env): Promise<Response> {
     const handle = String(form.get('handle') ?? '');
     if (form.get('decision') !== 'approve') return new Response(null, { status: 302, headers: (await oauth.denyConsent(req, handle)).headers });
     const ip = req.headers.get('cf-connecting-ip') ?? 'local';
-    const allowed = (await e.LOGIN_LIMITER.limit({ key: ip })).success && (await e.GLOBAL_LOGIN_LIMITER.limit({ key: 'all' })).success;
-    if (!allowed) return html(loginPage(details, handle, '시도가 너무 많습니다. 1분 뒤에 다시 시도하세요.'), new Headers(), 429);
+    // Per IP only: a shared bucket would let anyone lock the owner out, and app passwords are too long to guess anyway.
+    if (!(await e.LOGIN_LIMITER.limit({ key: ip })).success) return html(loginPage(details, handle, '시도가 너무 많습니다. 1분 뒤에 다시 시도하세요.'), new Headers(), 429);
     if (!(await safeEqual(String(form.get('password') ?? '').replace(/\s+/g, ''), mail.account(e).pass)))
       return html(loginPage(details, handle, '비밀번호가 맞지 않습니다.'), new Headers(), 401);
     const approved = await oauth.approveConsent(req, handle);

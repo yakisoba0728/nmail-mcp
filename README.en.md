@@ -451,7 +451,7 @@ Most requests exceed the Workers Free per-request CPU limit (10 ms); the Workers
 ## Security
 
 - Naver credentials are passed only as secrets (Workers) or environment variables (Node.js, Docker) and are never written to storage (KV, SQLite). Storage holds OAuth tokens and automation state only.
-- The OAuth sign-in page shows where access will be granted and warns about unknown web origins. Sign-in attempts are limited to 5 per minute per IP and 30 per minute in total.
+- The OAuth sign-in page shows where access will be granted and warns about unknown web origins. Sign-in attempts are limited to 5 per minute per IP.
 - Treat message content as untrusted input. Tool descriptions require user confirmation before sending or deleting, but the server does not enforce it; enable your client's tool approval prompts.
 - Auto-forwarding rules are not supported.
 - `bulk_action` cannot delete permanently and refuses to run if the count differs from its dry run.

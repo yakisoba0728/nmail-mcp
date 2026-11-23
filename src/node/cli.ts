@@ -30,20 +30,23 @@ serve only:
   TRUST_PROXY=1                  use X-Forwarded-For / -Proto / -Host from the reverse proxy
 `;
 
+/** Fixed-window limiter like the Workers binding. Memory is bounded: one window at a time, capped at MAX_KEYS. */
 function rateLimiter(limit: number, periodSec: number) {
-  const hits = new Map<string, { window: number; count: number }>();
+  const MAX_KEYS = 50_000;
+  const hits = new Map<string, number>();
+  let current = 0;
   return {
     async limit({ key }: { key: string }) {
       const window = Math.floor(Date.now() / 1000 / periodSec);
-      const h = hits.get(key);
-      if (!h || h.window !== window) {
-        // Drop only finished windows; clearing everything would also reset counters that are still active.
-        if (hits.size > 10_000) for (const [k, v] of hits) if (v.window !== window) hits.delete(k);
-        hits.set(key, { window, count: 1 });
-        return { success: true };
+      if (window !== current) {
+        hits.clear();
+        current = window;
       }
-      h.count++;
-      return { success: h.count <= limit };
+      const count = (hits.get(key) ?? 0) + 1;
+      // A flood of new keys within one window is refused rather than allowed to grow the map.
+      if (!hits.has(key) && hits.size >= MAX_KEYS) return { success: false };
+      hits.set(key, count);
+      return { success: count <= limit };
     },
   };
 }
@@ -62,7 +65,6 @@ function loadEnv() {
     NAVER_SIGNATURE: process.env.NAVER_SIGNATURE,
     OAUTH_KV: kv,
     LOGIN_LIMITER: rateLimiter(5, 60), // same as wrangler.jsonc
-    GLOBAL_LOGIN_LIMITER: rateLimiter(30, 60),
   };
   Object.assign(shared, e); // the object the MCP tools read
   return { e, kv };
