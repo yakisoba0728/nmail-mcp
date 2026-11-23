@@ -7,6 +7,7 @@ import { runCron } from '../automation';
 import worker from '../index';
 import { createServer as createMcpServer } from '../tools';
 import { SqliteKV } from './kv';
+import { clientKey, rateLimiter } from './limit';
 
 /**
  * Self-hosted entry point: the same Worker code on Node.
@@ -29,27 +30,6 @@ serve only:
   PUBLIC_URL                     external base URL, e.g. https://mail.example.com (required unless only localhost is used)
   TRUST_PROXY=1                  use X-Forwarded-For / -Proto / -Host from the reverse proxy
 `;
-
-/** Fixed-window limiter like the Workers binding. Memory is bounded: one window at a time, capped at MAX_KEYS. */
-function rateLimiter(limit: number, periodSec: number) {
-  const MAX_KEYS = 50_000;
-  const hits = new Map<string, number>();
-  let current = 0;
-  return {
-    async limit({ key }: { key: string }) {
-      const window = Math.floor(Date.now() / 1000 / periodSec);
-      if (window !== current) {
-        hits.clear();
-        current = window;
-      }
-      const count = (hits.get(key) ?? 0) + 1;
-      // A flood of new keys within one window is refused rather than allowed to grow the map.
-      if (!hits.has(key) && hits.size >= MAX_KEYS) return { success: false };
-      hits.set(key, count);
-      return { success: count <= limit };
-    },
-  };
-}
 
 function loadEnv() {
   const missing = ['NAVER_ID', 'NAVER_APP_PASSWORD'].filter((k) => !process.env[k]);
@@ -113,7 +93,7 @@ async function serve() {
       for (const [k, v] of Object.entries(req.headers)) if (v !== undefined && k !== 'host') for (const x of Array.isArray(v) ? v : [v]) headers.append(k, x);
       headers.set('host', url.host);
       // The rate limiter keys on this header (set by Cloudflare on Workers); never trust a client-sent one.
-      headers.set('cf-connecting-ip', (trustProxy && lastHop(req.headers['x-forwarded-for'])) || req.socket.remoteAddress || 'unknown');
+      headers.set('cf-connecting-ip', clientKey((trustProxy && lastHop(req.headers['x-forwarded-for'])) || req.socket.remoteAddress || 'unknown'));
       const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
       const request = new Request(url, { method: req.method, headers, body: hasBody ? (Readable.toWeb(req) as unknown as ReadableStream) : undefined, duplex: 'half' } as RequestInit);
       const ctx = { waitUntil: (p: Promise<unknown>) => void p.catch((err: Error) => log(err.message)), passThroughOnException() {}, props: {} };
