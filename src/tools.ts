@@ -468,7 +468,7 @@ tool(
 
 export function createServer() {
   const s = new McpServer(
-    { name: 'nmail-mcp', version: '1.1.5' },
+    { name: 'nmail-mcp', version: '1.1.6' },
     {
       instructions:
         'Naver Mail over IMAP/SMTP. Messages are {folder, uid}; folder aliases inbox/sent/drafts/trash/spam work everywhere. ' +
