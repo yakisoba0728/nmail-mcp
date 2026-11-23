@@ -2,6 +2,9 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "nmail-mcp",
   "main": "src/index.ts",
+  // Served only at https://nmail-mcp.<subdomain>.workers.dev; no per-version preview URLs
+  "workers_dev": true,
+  "preview_urls": false,
   "compatibility_date": "2026-10-01",
   // global_fetch_strictly_public: required by the OAuth library to fetch URL-style client ids (CIMD)
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
