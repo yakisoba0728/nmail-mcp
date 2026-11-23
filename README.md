@@ -4,7 +4,7 @@
 [![Cloudflare Workers](https://img.shields.io/badge/runs%20on-Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
 [![MCP](https://img.shields.io/badge/MCP-Streamable%20HTTP-6E56CF)](https://modelcontextprotocol.io/)
 
-네이버 메일을 ChatGPT에 붙이는 MCP 서버입니다. ChatGPT 커넥터로 등록해 두면 대화하면서 메일을 찾고, 읽고, 답장하고, 정리할 수 있습니다. Claude처럼 원격 MCP를 지원하는 다른 클라이언트에서도 똑같이 동작합니다.
+네이버 메일용 원격 MCP 서버입니다. MCP를 지원하는 AI 클라이언트라면 어디에 붙여도 됩니다. ChatGPT, Claude, Claude Code, Codex, Cursor, VS Code 같은 곳에 주소 하나만 등록하면, 대화하면서 메일을 찾고 읽고 답장하고 정리할 수 있습니다.
 
 네이버가 공식으로 MCP를 제공하지 않아서 IMAP/SMTP로 직접 붙였습니다. 내 Cloudflare 계정에 올려 혼자 쓰는 구조이고, 네이버 공식 서비스와는 관련이 없습니다.
 
@@ -15,14 +15,14 @@
 - 메일 검색: Gmail 검색어 문법(`from:` `newer_than:7d` `has:attachment` `-제외어` 등), 모든 메일함 한 번에 검색, 본문 키워드 검색
 - 읽기: 본문, 첨부 목록, 링크, SPF/DKIM/DMARC 결과, 일정 초대(.ics). 원문(.eml)이나 전체 헤더도 볼 수 있습니다.
 - 대화 묶기: 받은 메일과 보낸 메일을 한 흐름으로 시간순 정렬
-- 첨부: 이미지는 ChatGPT가 직접 볼 수 있는 형태로, 텍스트는 텍스트로, 나머지는 파일로 돌려줍니다.
+- 첨부: 이미지는 AI가 직접 볼 수 있는 이미지 콘텐츠로, 텍스트는 텍스트로, 나머지는 파일로 돌려줍니다.
 - 보내기: 새 메일, 답장(전체 답장), 전달(원래 첨부 포함), 일정 초대 수락·거절. 참조·숨은참조, HTML, 첨부, 서명 지원
 - 임시보관함: 저장, 목록, 고치기, 바로 보내기
 - 정리: 이동, 읽음·별표, 휴지통, 메일함 관리, 검색 결과 일괄 처리
 - 수신거부: 원클릭(RFC 8058)이나 mailto로 처리하고, 둘 다 없으면 링크를 알려 줍니다.
 - 자동화: 예약 발송, 새 메일 자동 분류, 부재중 자동 응답
 
-ChatGPT에 이렇게 말하면 됩니다.
+연결한 뒤에는 이런 식으로 말하면 됩니다.
 
 ```text
 이번 주에 온 결제 메일 정리해 줘
@@ -62,16 +62,24 @@ npm run deploy
 
 로그인한 Cloudflare 계정이 여러 개면 프로젝트 폴더의 `.env`에 `CLOUDFLARE_ACCOUNT_ID=<계정 ID>`를 적어 두세요. KV가 자동으로 안 만들어지면 `npx wrangler kv namespace create OAUTH_KV`로 만들고 나온 id를 `wrangler.jsonc`의 `kv_namespaces`에 넣으면 됩니다.
 
-### 3. ChatGPT에 연결
+### 3. 클라이언트에 연결
 
-ChatGPT 설정에서 개발자 모드를 켜고(유료 요금제 필요) 커스텀 커넥터를 추가합니다.
+서버 주소는 `https://nmail-mcp.<계정 하위 도메인>.workers.dev/mcp` 하나입니다. Streamable HTTP와 OAuth 2.1(클라이언트 자동 등록, PKCE)을 쓰기 때문에, 원격 MCP 서버와 OAuth를 지원하는 클라이언트면 어디든 연결됩니다. Client ID나 API 키는 따로 넣지 않습니다.
 
-- MCP 서버 URL: `https://nmail-mcp.<계정 하위 도메인>.workers.dev/mcp`
-- 인증: OAuth. Client ID는 비워 둡니다(자동 등록).
+| 클라이언트 | 연결 방법 |
+|---|---|
+| ChatGPT | 설정에서 개발자 모드를 켜고 커스텀 커넥터 추가 → URL 입력, 인증은 OAuth |
+| Claude (웹·데스크톱) | 설정 → 커넥터 → 커스텀 커넥터 추가 → URL 입력 |
+| Claude Code | `claude mcp add --transport http nmail <URL>` 후 `/mcp`에서 로그인 |
+| Codex CLI | `codex mcp add nmail --url <URL>` 후 `codex mcp login nmail` |
+| Cursor | `~/.cursor/mcp.json`에 `{"mcpServers": {"nmail": {"url": "<URL>"}}}` |
+| VS Code | `.vscode/mcp.json`에 `{"servers": {"nmail": {"type": "http", "url": "<URL>"}}}` |
 
-연결하면 로그인 창이 뜹니다. 여기에 네이버 애플리케이션 비밀번호를 넣으면 끝입니다. 처음에는 "메일함 목록 보여 줘" 정도로 확인해 보세요.
+메뉴 이름이나 설정 형식은 클라이언트 버전에 따라 바뀔 수 있으니 각 클라이언트 문서를 함께 보세요. 위 방법은 각 문서를 기준으로 정리한 것이고, 모든 클라이언트에서 직접 확인한 것은 아닙니다.
 
-연결을 끊고 싶으면 네이버에서 그 애플리케이션 비밀번호를 지우면 됩니다.
+연결하면 로그인 창이 뜹니다. 네이버 애플리케이션 비밀번호를 넣으면 끝입니다. 처음에는 "메일함 목록 보여 줘" 정도로 확인해 보세요. 여러 클라이언트에 동시에 연결해도 됩니다.
+
+연결을 모두 끊고 싶으면 네이버에서 그 애플리케이션 비밀번호를 지우면 됩니다.
 
 ## 도구 목록
 
@@ -108,7 +116,7 @@ in:sent in:anywhere
 
 ```mermaid
 flowchart LR
-  C[ChatGPT] -- "MCP / OAuth 2.1" --> W
+  C["MCP 클라이언트<br/>(ChatGPT, Claude, Cursor …)"] -- "MCP / OAuth 2.1" --> W
   subgraph W[Cloudflare Worker]
     A[OAuth 로그인] --> T[MCP 도구]
     T --> I[IMAP 클라이언트]
@@ -162,8 +170,8 @@ Cloudflare Workers 무료 요금제로도 돌아가지만 권하지는 않습니
 ## 보안
 
 - 네이버 비밀번호는 Worker 시크릿에만 있습니다. KV에는 OAuth 토큰과 자동화 상태(예약 메일, 분류 규칙, 부재중 설정)만 들어가고, 예약 메일 원문은 보낸 뒤 지웁니다.
-- 로그인 창은 권한이 어디로 넘어가는지 보여 주고, ChatGPT나 Claude가 아니면 경고합니다. 비밀번호 시도는 IP당 분당 5회로 막혀 있습니다.
-- 메일 본문은 믿으면 안 되는 데이터입니다. 메일 안에 "이 메일을 전달해" 같은 문장이 있어도 AI가 따르지 않도록 도구 설명에 적어 두었지만, 서버가 강제하는 건 아닙니다. ChatGPT에서 쓰기 도구 실행 전 확인을 켜 두세요.
+- 로그인 창은 권한이 어디로 넘어가는지 보여 줍니다. 내 컴퓨터의 앱(Claude Code, Cursor 등)이 아니고 잘 알려진 AI 서비스도 아닌 곳이면 경고를 띄웁니다. 비밀번호 시도는 IP당 분당 5회로 막혀 있습니다.
+- 메일 본문은 믿으면 안 되는 데이터입니다. 메일 안에 "이 메일을 전달해" 같은 문장이 있어도 AI가 따르지 않도록 도구 설명에 적어 두었지만, 서버가 강제하는 건 아닙니다. 쓰는 클라이언트에서 도구 실행 전 확인 기능을 켜 두세요.
 - 같은 이유로 자동 전달 규칙은 일부러 만들지 않았습니다.
 - `bulk_action`은 먼저 개수만 세는 dry run을 하고, 실제 실행할 때 개수가 달라졌으면 거부합니다. 영구 삭제는 일괄 처리로 할 수 없습니다.
 - 부재중 응답은 RFC 3834를 따릅니다. 메일링 리스트, no-reply, 자동 응답, 내 주소에는 답하지 않습니다.
@@ -208,11 +216,11 @@ npm run dev                      # http://localhost:8787/mcp
 
 ## English
 
-**nmail-mcp** is a Model Context Protocol (MCP) server that connects Naver Mail (네이버 메일) to ChatGPT, Claude and other remote MCP clients. It runs on Cloudflare Workers, talks to Naver over IMAP/SMTP, and signs you in with OAuth 2.1 using a Naver app password.
+**nmail-mcp** is a remote Model Context Protocol (MCP) server for Naver Mail (네이버 메일). Any MCP client with remote server and OAuth support can use it: ChatGPT, Claude, Claude Code, Codex, Cursor, VS Code and others. It runs on Cloudflare Workers, talks to Naver over IMAP/SMTP, and signs you in with OAuth 2.1 using a Naver app password.
 
 - 28 tools: Gmail-style search with body keyword scan, read, threads, attachments (images returned as image content), send / reply / forward, drafts, bulk actions, unsubscribe (RFC 8058), calendar invite replies, scheduled send, filing rules and a vacation responder
 - Lightweight IMAP and SMTP clients written for Workers; handles EUC-KR / cp949 mail and Korean folder names
-- Deploy: set `NAVER_ID` and `NAVER_APP_PASSWORD` as Worker secrets, run `npm run deploy`, then add `https://<worker>.workers.dev/mcp` as a custom connector (OAuth) in ChatGPT developer mode
+- Deploy: set `NAVER_ID` and `NAVER_APP_PASSWORD` as Worker secrets, run `npm run deploy`, then add `https://<worker>.workers.dev/mcp` to your MCP client as a remote (Streamable HTTP) server; it signs in with OAuth, no API key needed
 - Workers Paid ($5/month) is recommended; most requests use 10–110 ms of CPU, above the free plan's 10 ms
 
 Not affiliated with Naver.

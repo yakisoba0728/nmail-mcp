@@ -9,7 +9,8 @@ export interface Env extends mail.MailEnv {
 
 // OAuth login for a single owner: the password is the Naver app password stored as a Worker secret.
 const esc = (s = '') => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const KNOWN = /(^|\.)(chatgpt\.com|openai\.com|claude\.ai|claude\.com)$/;
+// Web-based MCP clients whose redirect hosts need no warning (local apps use loopback redirects).
+const KNOWN = /(^|\.)(chatgpt\.com|openai\.com|claude\.ai|claude\.com|anthropic\.com|grok\.com|x\.ai|mistral\.ai|perplexity\.ai|meta\.ai|github\.com|cursor\.com|cursor\.sh)$/;
 
 function loginPage(d: ConsentDescription, handle: string, error?: string) {
   const warn = !d.redirectIsLoopback && !KNOWN.test(d.redirectHost)

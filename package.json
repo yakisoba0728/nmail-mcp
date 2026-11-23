@@ -1,7 +1,7 @@
 {
   "name": "nmail-mcp",
   "version": "1.0.0",
-  "description": "Naver Mail MCP server for ChatGPT and other remote MCP clients, running on Cloudflare Workers (IMAP/SMTP, OAuth 2.1)",
+  "description": "Remote MCP server for Naver Mail (네이버 메일) on Cloudflare Workers: IMAP/SMTP, OAuth 2.1, works with any MCP client",
   "keywords": [
     "mcp",
     "mcp-server",
@@ -9,13 +9,15 @@
     "naver",
     "naver-mail",
     "chatgpt",
-    "chatgpt-connector",
     "claude",
     "cloudflare-workers",
     "imap",
     "smtp",
     "email",
-    "korean"
+    "korean",
+    "ai-agents",
+    "llm",
+    "cursor"
   ],
   "license": "Apache-2.0",
   "author": "yakisoba0728",
