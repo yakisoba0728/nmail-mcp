@@ -17,7 +17,7 @@ export default {
     let p = providers.get(origin);
     if (!p) {
       const host = new URL(origin).hostname;
-      const mcp = createMcpHandler(createServer, { allowedHostnames: [host], allowedOriginHostnames: [host] });
+      const mcp = createMcpHandler(() => createServer(origin), { allowedHostnames: [host], allowedOriginHostnames: [host] });
       p = new OAuthProvider<Env>({
         apiRoute: '/mcp',
         apiHandler: { fetch: (r: Request, en: Env, c: ExecutionContext) => mcp(r, en, c) } as never,

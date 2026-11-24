@@ -43,6 +43,7 @@ function loadEnv() {
     NAVER_APP_PASSWORD: process.env.NAVER_APP_PASSWORD!,
     NAVER_NAME: process.env.NAVER_NAME,
     NAVER_SIGNATURE: process.env.NAVER_SIGNATURE,
+    ATTACHMENT_DOWNLOAD_MAX_BYTES: 100_000_000,
     OAUTH_KV: kv,
     LOGIN_LIMITER: rateLimiter(5, 60), // same as wrangler.jsonc
   };

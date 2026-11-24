@@ -24,7 +24,7 @@ const SCENARIOS: [string, string, Record<string, unknown>, number?][] = [
 ];
 
 test('cpu', async () => {
-  const mcp = createMcpHandler(createServer);
+  const mcp = createMcpHandler(() => createServer());
   const rpc = async (method: string, params?: object) => {
     const r = await mcp(new Request('http://localhost/mcp', { method: 'POST', headers: { host: 'localhost', 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'mcp-protocol-version': '2025-06-18' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) }), {}, {} as never);
     const body = await r.text();

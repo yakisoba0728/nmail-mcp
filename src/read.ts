@@ -32,7 +32,9 @@ export const icsOf = (m: Email) =>
 
 export type ReadFormat = 'text' | 'html' | 'raw' | 'headers';
 
-const READ_HEADERS = ['in-reply-to', 'references', 'authentication-results', 'list-unsubscribe', 'list-unsubscribe-post'];
+const READ_HEADERS = ['in-reply-to', 'references', 'authentication-results'];
+const LINK_HEADERS = ['list-unsubscribe', 'list-unsubscribe-post'];
+const TEXT_PAGE_CHARS = 4000;
 const MAX_PLAIN_BYTES = 256 * 1024;
 const MAX_HTML_BYTES = 512 * 1024;
 
@@ -40,17 +42,18 @@ const MAX_HTML_BYTES = 512 * 1024;
  * Reads only what is shown: envelope, structure, a few headers and the text parts (not the whole message, whose
  * attachments would be downloaded and parsed for nothing). Attachments are listed from the structure.
  */
-export async function readEmail(c: ImapClient, folder: string, uid: number, format: ReadFormat = 'text') {
+export async function readEmail(c: ImapClient, folder: string, uid: number, { format = 'text', offset = 0, includeLinks = false }: { format?: ReadFormat; offset?: number; includeLinks?: boolean } = {}) {
   if (format === 'raw') return { folder, uid, raw: clip((await fetchSource(c, folder, uid)).toString('utf8')) };
   await c.mailboxOpen(await resolveFolder(c, folder), { readOnly: true });
-  const m = await c.fetchOne(String(uid), { uid: true, envelope: true, bodyStructure: true, flags: true, size: true, headers: format === 'headers' ? true : READ_HEADERS }, { uid: true });
+  const headers = format === 'headers' ? true : includeLinks ? [...READ_HEADERS, ...LINK_HEADERS] : READ_HEADERS;
+  const m = await c.fetchOne(String(uid), { uid: true, envelope: true, bodyStructure: true, flags: true, size: true, headers }, { uid: true });
   if (!m) throw new Error(`Message uid ${uid} not found in ${folder}`);
   if (format === 'headers') return { folder, uid, headers: headerLines(m.headers).map((h) => `${h.name}: ${h.value}`) };
   const h = headerMap(m.headers);
   const { plain, html } = bodyParts(m.bodyStructure);
   const atts = attachmentNodes(m.bodyStructure);
   const ics = atts.filter((n) => n.type === 'text/calendar' || /\.ics$/i.test(leafName(n) ?? ''));
-  const wantHtml = html && (format === 'html' || !plain);
+  const wantHtml = html && (format === 'html' || includeLinks || !plain);
   const parts = [
     ...(plain ? [{ key: section(plain), maxLength: MAX_PLAIN_BYTES }] : []),
     ...(wantHtml ? [{ key: section(html), maxLength: MAX_HTML_BYTES }] : []),
@@ -70,7 +73,12 @@ export async function readEmail(c: ImapClient, folder: string, uid: number, form
     htmlSource = raw ? decodePart(raw, html, 'raw') : '';
   }
   if (!text && htmlSource) text = htmlToText(htmlSource);
-  const links = [...new Set([...(htmlSource ? htmlSource.matchAll(/href\s*=\s*["']([^"']+)["']/gi) : []), ...text.matchAll(/(https?:\/\/[^\s<>"')\]]+)/gi)].map((x) => x[1]).filter((u) => /^https?:/i.test(u)))];
+  let end = offset + TEXT_PAGE_CHARS;
+  // Keep a surrogate pair intact at the page boundary.
+  if (/[\uD800-\uDBFF][\uDC00-\uDFFF]/.test(text.slice(end - 1, end + 1))) end--;
+  const links = includeLinks
+    ? [...new Set([...htmlSource.matchAll(/href\s*=\s*["']([^"']+)["']/gi), ...text.matchAll(/(https?:\/\/[^\s<>"')\]]+)/gi)].map((x) => x[1]).filter((u) => /^https?:/i.test(u)))].slice(0, 50)
+    : [];
   const e = m.envelope;
   return {
     folder,
@@ -86,27 +94,47 @@ export async function readEmail(c: ImapClient, folder: string, uid: number, form
     subject: e?.subject,
     unread: !m.flags?.has('\\Seen'),
     flagged: !!m.flags?.has('\\Flagged'),
-    text: clip(text),
+    text: format === 'text' ? text.slice(offset, end) : clip(text),
+    ...(format === 'text' && end < text.length && { nextOffset: end }),
     ...(format === 'html' && htmlSource && { html: clip(htmlSource) }),
     attachments: atts.map((n, index) => ({ index, filename: leafName(n), mimeType: n.type, size: decodedSize(n), ...(n.id && { contentId: n.id }), ...(n.disposition === 'inline' && { inline: true }) })),
-    ...(links.length && { links: links.slice(0, 50) }),
+    ...(links.length && { links }),
     ...(h['authentication-results'] && { authentication: Object.fromEntries([...h['authentication-results'].matchAll(/\b(spf|dkim|dmarc)=(\w+)/gi)].map((x) => [x[1].toLowerCase(), x[2].toLowerCase()])) }),
-    ...(h['list-unsubscribe'] && { listUnsubscribe: { targets: [...h['list-unsubscribe'].matchAll(/<([^>]+)>/g)].map((x) => x[1]), oneClick: /one-click/i.test(h['list-unsubscribe-post'] ?? '') } }),
+    ...(includeLinks && h['list-unsubscribe'] && { listUnsubscribe: { targets: [...h['list-unsubscribe'].matchAll(/<([^>]+)>/g)].map((x) => x[1]), oneClick: /one-click/i.test(h['list-unsubscribe-post'] ?? '') } }),
     ...(ics.length && { calendarEvents: ics.flatMap((n) => parseIcs(get(n))) }),
   };
 }
 
-/** Downloads one attachment part (index as listed by read_email). */
-export async function getAttachment(c: ImapClient, folder: string, uid: number, index: number) {
-  await c.mailboxOpen(await resolveFolder(c, folder), { readOnly: true });
+export async function openAttachment(c: ImapClient, folder: string, uid: number, index: number) {
+  const mailbox = await c.mailboxOpen(folder, { readOnly: true });
   const m = await c.fetchOne(String(uid), { uid: true, bodyStructure: true }, { uid: true });
   if (!m) throw new Error(`Message uid ${uid} not found in ${folder}`);
   const node = attachmentNodes(m.bodyStructure)[index];
   if (!node) throw new Error(`Attachment ${index} not found`);
-  if (decodedSize(node) > MAX_ATTACHMENT_BYTES * 1.05) throw new Error(`Attachment is larger than ${MAX_ATTACHMENT_BYTES} bytes`);
-  const part = await c.fetchOne(String(uid), { uid: true, bodyParts: [{ key: section(node) }] }, { uid: true });
-  const bytes = decodeTransfer(part ? (part.bodyParts?.get(section(node)) ?? Buffer.alloc(0)) : Buffer.alloc(0), node.encoding);
-  if (bytes.length > MAX_ATTACHMENT_BYTES) throw new Error(`Attachment is larger than ${MAX_ATTACHMENT_BYTES} bytes`);
-  return { filename: leafName(node) ?? `attachment-${index}`, mimeType: node.type, bytes, contentId: node.id };
+  return { mailbox, node, filename: leafName(node) ?? `attachment-${index}`, mimeType: node.type };
+}
+
+export class AttachmentTooLargeError extends Error {}
+
+export async function fetchAttachmentBytes(c: ImapClient, uid: number, node: MessageStructureObject, maxBytes = MAX_ATTACHMENT_BYTES) {
+  const tooLarge = () => new AttachmentTooLargeError(`Attachment is larger than ${maxBytes} bytes`);
+  if (decodedSize(node) > maxBytes * 1.05) throw tooLarge();
+  const encoding = node.encoding?.toLowerCase();
+  // Include enough room for MIME base64 line breaks and detect incomplete partial fetches.
+  const maxLength = (encoding === 'base64' ? Math.ceil(4 * Math.ceil(maxBytes / 3) * 1.05)
+    : encoding === 'quoted-printable' ? Math.ceil(maxBytes * 1.05) : maxBytes) + 1;
+  const part = await c.fetchOne(String(uid), { uid: true, bodyParts: [{ key: section(node), maxLength }] }, { uid: true });
+  const raw = part && part.bodyParts?.get(section(node));
+  if (!raw) throw new Error('Attachment data not found');
+  if (raw.length >= maxLength) throw tooLarge();
+  const bytes = encoding === 'base64' ? Buffer.from(raw.toString('latin1'), 'base64') : decodeTransfer(raw, encoding);
+  if (bytes.length > maxBytes) throw tooLarge();
+  return bytes;
+}
+
+/** Downloads one attachment part for clients that need the bytes. */
+export async function getAttachment(c: ImapClient, folder: string, uid: number, index: number) {
+  const { filename, mimeType, node } = await openAttachment(c, await resolveFolder(c, folder), uid, index);
+  return { filename, mimeType, bytes: await fetchAttachmentBytes(c, uid, node), contentId: node.id };
 }
 

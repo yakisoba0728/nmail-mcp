@@ -1,8 +1,10 @@
 import { AuthorizationError, type ConsentDescription, type OAuthHelpers } from '@cloudflare/workers-oauth-provider';
 import * as mail from './mail';
+import { ATTACHMENT_PATH, downloadAttachment } from './download';
 
 export interface Env extends mail.MailEnv {
   OAUTH_KV: KVNamespace;
+  ATTACHMENT_DOWNLOAD_MAX_BYTES?: number;
   LOGIN_LIMITER: RateLimit;
   OAUTH_PROVIDER: OAuthHelpers;
 }
@@ -41,6 +43,7 @@ const text = (body: string, status: number) => new Response(body, { status, head
 export async function authorize(req: Request, e: Env): Promise<Response> {
   const url = new URL(req.url);
   if (url.pathname === '/') return text('nmail-mcp: MCP endpoint is /mcp', 200);
+  if (url.pathname.startsWith(ATTACHMENT_PATH)) return downloadAttachment(req, e);
   if (url.pathname !== '/authorize') return text('Not Found', 404);
   // Fail closed: without the secrets there is nothing to check the password against.
   if (!e.NAVER_ID || !e.NAVER_APP_PASSWORD) return text('Server is not configured: set NAVER_ID and NAVER_APP_PASSWORD secrets.', 503);

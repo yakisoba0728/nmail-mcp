@@ -344,9 +344,9 @@ Cloudflare Workers에서는 `wrangler secret put`으로 앞의 네 값을 설정
 | 도구 | 설명 |
 |---|---|
 | `search_emails` | 메일 검색. Gmail 검색어, 메일함 지정, 본문 키워드(`maxScan`, `resume`), 미리보기(`snippets`) |
-| `read_email` | 메일 읽기. `format`: `text`, `html`, `raw`, `headers` |
+| `read_email` | 메일 읽기. 기본 `text`는 최대 4,000자씩 반환하며 `nextOffset`을 `offset`에 넣어 이어 읽습니다. 링크 추출은 `includeLinks: true`로 요청합니다. `html`, `raw`, `headers` 형식도 지원합니다. |
 | `get_thread` | 대화 전체를 시간순으로 조회 |
-| `get_attachment` | 첨부 파일 (이미지는 이미지 콘텐츠로 반환) |
+| `get_attachment` | HTTP에서는 5분짜리 원본 다운로드 링크를 제공합니다(Node.js·Docker 최대 100MB, Workers 최대 10MiB). 큰 첨부는 네이버 메일에서 직접 받으세요. PDF·PNG·JPEG·GIF·WebP·텍스트는 브라우저 미리보기를 지원합니다. |
 | `find_contacts` | 주고받은 메일에서 연락처 검색 |
 | `sender_stats` | 보낸 사람별 메일 수 |
 </details>
@@ -450,7 +450,7 @@ Cloudflare 배포에서 `wrangler tail`로 측정한 요청당 CPU 시간입니�
 
 ## 보안
 
-- 네이버 자격 증명은 시크릿(Workers) 또는 환경 변수(Node.js·Docker)로만 전달되며 저장소(KV·SQLite)에 기록되지 않습니다. 저장소에는 OAuth 토큰과 자동화 상태만 저장됩니다.
+- 네이버 자격 증명은 시크릿(Workers) 또는 환경 변수(Node.js·Docker)로 전달됩니다. KV·SQLite에는 OAuth 토큰, 자동화 상태, 5분간 유효한 다운로드 링크용 기록이 저장됩니다. 첨부 원본은 다운로드할 때 네이버 메일에서 가져옵니다.
 - OAuth 로그인 화면은 권한을 받을 대상을 표시하고, 알려지지 않은 웹 주소일 경우 경고합니다. 로그인 시도는 IP당 분당 5회로 제한됩니다.
 - 메일 본문은 신뢰할 수 없는 입력으로 취급해야 합니다. 도구 설명에서 발송·삭제 전 사용자 확인을 요구하지만 서버에서 강제하지는 않으므로, 클라이언트의 도구 실행 확인 기능을 사용하는 것이 좋습니다.
 - 자동 전달 규칙은 지원하지 않습니다.

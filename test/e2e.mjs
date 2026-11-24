@@ -110,10 +110,15 @@ async function main() {
   const raw = await call('read_email', { folder: 'inbox', uid: orig.uid, format: 'raw' });
   check('raw format', /^[\s\S]*MIME-Version/i.test(raw.raw));
   const pngIdx = r.attachments.find((a) => a.filename === 'dot.png').index;
-  const img = await call('get_attachment', { folder: 'inbox', uid: orig.uid, index: pngIdx }, true);
-  check('get_attachment image content', img.content.some((c) => c.type === 'image' && c.data === PNG));
+  const img = await call('get_attachment', { folder: 'inbox', uid: orig.uid, index: pngIdx });
+  const imageDownload = await fetch(img.downloadUrl);
+  check('get_attachment image download', imageDownload.ok && Buffer.from(await imageDownload.arrayBuffer()).equals(Buffer.from(PNG, 'base64')));
+  const imagePreview = await fetch(img.previewUrl);
+  check('get_attachment PNG preview', imagePreview.ok && imagePreview.headers.get('content-type') === 'image/png' && imagePreview.headers.get('content-disposition')?.startsWith('inline;'));
   const txt = await call('get_attachment', { folder: 'inbox', uid: orig.uid, index: r.attachments.find((a) => a.filename === '메모.txt').index });
   check('get_attachment text', txt.text === '첨부 텍스트');
+  const textDownload = await fetch(txt.downloadUrl);
+  check('get_attachment text download', textDownload.ok && await textDownload.text() === '첨부 텍스트');
 
   await call('reply_email', { folder: 'inbox', uid: orig.uid, text: '답장입니다' });
   await call('forward_email', { folder: 'inbox', uid: orig.uid, to: [ME], text: '전달합니다' });
@@ -135,9 +140,10 @@ async function main() {
   await call('send_email', { to: [ME], subject: `[${TAG}] 2MB`, text: 'big', attachments: [{ filename: '큰파일.bin', contentBase64: big.toString('base64'), mimeType: 'application/octet-stream' }] });
   const bigMsg = (await waitFor(tagged('subject:2MB'), 1, ['inbox']))[0];
   const bigR = bigMsg && (await call('read_email', { folder: 'inbox', uid: bigMsg.uid }));
-  const bigAtt = bigR && (await call('get_attachment', { folder: 'inbox', uid: bigMsg.uid, index: 0 }, true));
-  const blob = bigAtt?.content.find((c) => c.type === 'resource')?.resource.blob;
-  check('2MB attachment round-trip (Korean filename)', bigR?.attachments[0]?.filename === '큰파일.bin' && blob && Buffer.from(blob, 'base64').equals(big));
+  const bigAtt = bigR && (await call('get_attachment', { folder: 'inbox', uid: bigMsg.uid, index: 0 }));
+  const download = bigAtt && await fetch(bigAtt.downloadUrl);
+  check('2MB attachment round-trip (Korean filename)', bigR?.attachments[0]?.filename === '큰파일.bin' && download?.ok &&
+    download.headers.get('content-disposition')?.includes(encodeURIComponent('큰파일.bin')) && Buffer.from(await download.arrayBuffer()).equals(big));
   const answered = await call('search_emails', { query: tagged('is:answered'), folders: ['inbox'] });
   check('original marked answered', answered.messages.some((m) => m.uid === orig.uid));
   const reMsg = subj(/^Re:/);

@@ -344,9 +344,9 @@ Messages are addressed as `{folder, uid}`. Folder aliases `inbox`, `sent`, `draf
 | Tool | Description |
 |---|---|
 | `search_emails` | Search with Gmail syntax, folder selection, body keywords (`maxScan`, `resume`), previews (`snippets`) |
-| `read_email` | Read a message. `format`: `text`, `html`, `raw`, `headers` |
+| `read_email` | Read a message. Default `text` pages contain up to 4,000 characters. Pass `nextOffset` as `offset` to continue. Use `includeLinks: true` to extract links. Also supports `html`, `raw`, and `headers`. |
 | `get_thread` | A whole conversation, oldest first |
-| `get_attachment` | An attachment (images are returned as image content) |
+| `get_attachment` | HTTP download links expire after five minutes (up to 100MB on Node.js and Docker, 10MiB on Workers). Download larger files directly from Naver Mail. PDF, PNG, JPEG, GIF, WebP, and text support browser previews. |
 | `find_contacts` | Contacts from sent and received mail |
 | `sender_stats` | Message counts by sender |
 </details>
@@ -450,7 +450,7 @@ Most requests exceed the Workers Free per-request CPU limit (10 ms); the Workers
 
 ## Security
 
-- Naver credentials are passed only as secrets (Workers) or environment variables (Node.js, Docker) and are never written to storage (KV, SQLite). Storage holds OAuth tokens and automation state only.
+- Naver credentials are passed as secrets (Workers) or environment variables (Node.js, Docker). KV and SQLite store OAuth tokens, automation state, and five-minute download link records. Attachment contents are retrieved from Naver Mail when downloaded.
 - The OAuth sign-in page shows where access will be granted and warns about unknown web origins. Sign-in attempts are limited to 5 per minute per IP.
 - Treat message content as untrusted input. Tool descriptions require user confirmation before sending or deleting, but the server does not enforce it; enable your client's tool approval prompts.
 - Auto-forwarding rules are not supported.
